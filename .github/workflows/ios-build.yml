@@ -1,0 +1,52 @@
+name: iOS Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '15.4'
+
+      - name: Resolve Swift package dependencies
+        working-directory: iAPSAdvisor
+        run: swift package resolve
+
+      - name: Import signing certificates
+        uses: apple-actions/import-codesign-certs@v2
+        with:
+          p12-file-base64: ${{ secrets.P12_BASE64 }}
+          p12-password: ${{ secrets.P12_PASSWORD }}
+          mobileprovision-base64: ${{ secrets.PROVISIONING_PROFILE }}
+
+      - name: Build archive
+        working-directory: iAPSAdvisor
+        run: |
+          xcodebuild \
+            -scheme iAPSAdvisor \
+            -configuration Release \
+            -archivePath $PWD/build/iAPSAdvisor.xcarchive \
+            archive
+
+      - name: Export IPA
+        working-directory: iAPSAdvisor
+        run: |
+          xcodebuild \
+            -exportArchive \
+            -archivePath $PWD/build/iAPSAdvisor.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath $PWD/build
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: iAPSAdvisor-ipa
+          path: iAPSAdvisor/build/*.ipa
