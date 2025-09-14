@@ -1,0 +1,78 @@
+name: iOS TestFlight
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '15.4'
+
+      - name: Resolve Swift package dependencies
+        working-directory: iAPSAdvisor
+        run: swift package resolve
+
+      - name: Import signing certificates
+        uses: apple-actions/import-codesign-certs@v2
+        with:
+          p12-file-base64: ${{ secrets.P12_BASE64 }}
+          p12-password: ${{ secrets.P12_PASSWORD }}
+          mobileprovision-base64: ${{ secrets.PROVISIONING_PROFILE }}
+
+      - name: Run tests
+        working-directory: iAPSAdvisor
+        run: |
+          xcodebuild \
+            -scheme iAPSAdvisor \
+            -destination 'platform=iOS Simulator,name=iPhone 14' \
+            test
+
+      - name: Archive app
+        working-directory: iAPSAdvisor
+        run: |
+          xcodebuild \
+            -scheme iAPSAdvisor \
+            -configuration Release \
+            -archivePath $PWD/build/iAPSAdvisor.xcarchive \
+            archive
+
+      - name: Export IPA
+        working-directory: iAPSAdvisor
+        run: |
+          cat <<'PLIST' > ExportOptions.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+            <dict>
+              <key>method</key>
+              <string>app-store</string>
+              <key>signingStyle</key>
+              <string>automatic</string>
+            </dict>
+          </plist>
+          PLIST
+          xcodebuild \
+            -exportArchive \
+            -archivePath $PWD/build/iAPSAdvisor.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath $PWD/build
+
+      - name: Upload to TestFlight
+        working-directory: iAPSAdvisor
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        run: |
+          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > AuthKey.p8
+          xcrun altool --upload-app -t ios -f build/iAPSAdvisor.ipa \
+            --apiKey "$APP_STORE_CONNECT_KEY_ID" \
+            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
