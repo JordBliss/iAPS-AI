@@ -56,6 +56,39 @@ final class NightscoutServiceTests: XCTestCase {
         let items = components.queryItems ?? []
         XCTAssertTrue(items.contains(URLQueryItem(name: "find[eventType]", value: "Insulin Injection")))
     }
+
+    func testFetchBGReadingsHandlesNon200Response() async {
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!
+            return (response, Data())
+        }
+
+        let service = NightscoutService(baseURL: URL(string: "https://example.com")!)
+
+        do {
+            _ = try await service.fetchBGReadings(startDate: "2021-01-01")
+            XCTFail("Expected error for non-200 response")
+        } catch {
+            XCTAssertEqual((error as? URLError)?.code, .badServerResponse)
+        }
+    }
+
+    func testFetchBGReadingsDecodingError() async {
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let data = "invalid".data(using: .utf8)!
+            return (response, data)
+        }
+
+        let service = NightscoutService(baseURL: URL(string: "https://example.com")!)
+
+        do {
+            _ = try await service.fetchBGReadings(startDate: "2021-01-01")
+            XCTFail("Expected decoding error")
+        } catch {
+            XCTAssertTrue(error is DecodingError)
+        }
+    }
 }
 
 private class MockURLProtocol: URLProtocol {
@@ -75,6 +108,10 @@ private class MockURLProtocol: URLProtocol {
             return
         }
         let (response, data) = handler(request)
+        if response.statusCode != 200 {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: data)
         client?.urlProtocolDidFinishLoading(self)
