@@ -3,13 +3,28 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.example.iapsadvisor</string>
+    <string>org.openaps.iAPSAdvisor</string>
     <key>CFBundleName</key>
     <string>iAPSAdvisor</string>
+    <key>CFBundleDisplayName</key>
+    <string>iAPSAdvisor</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
+    <string>1.0.0</string>
     <key>CFBundleVersion</key>
     <string>1</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.healthcare-fitness</string>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+    </dict>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
+    <key>NSHealthShareUsageDescription</key>
+    <string>This app reads health data to provide insulin advice.</string>
+    <key>NSHealthUpdateUsageDescription</key>
+    <string>This app writes health data to log insulin recommendations.</string>
     <key>UILaunchScreen</key>
     <dict/>
 </dict>
