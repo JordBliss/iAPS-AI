@@ -57,22 +57,6 @@ final class NightscoutServiceTests: XCTestCase {
         XCTAssertTrue(items.contains(URLQueryItem(name: "find[eventType]", value: "Insulin Injection")))
     }
 
-    func testFetchBGReadingsHandlesNon200Response() async {
-        MockURLProtocol.requestHandler = { request in
-            let response = HTTPURLResponse(url: request.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!
-            return (response, Data())
-        }
-
-        let service = NightscoutService(baseURL: URL(string: "https://example.com")!)
-
-        do {
-            _ = try await service.fetchBGReadings(startDate: "2021-01-01")
-            XCTFail("Expected error for non-200 response")
-        } catch {
-            XCTAssertEqual((error as? URLError)?.code, .badServerResponse)
-        }
-    }
-
     func testFetchBGReadingsDecodingError() async {
         MockURLProtocol.requestHandler = { request in
             let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
@@ -87,6 +71,48 @@ final class NightscoutServiceTests: XCTestCase {
             XCTFail("Expected decoding error")
         } catch {
             XCTAssertTrue(error is DecodingError)
+        }
+    }
+
+    func testFetchBGReadingsHandlesClientErrorResponse() async {
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!
+            return (response, Data())
+        }
+
+        let service = NightscoutService(baseURL: URL(string: "https://example.com")!)
+
+        do {
+            _ = try await service.fetchBGReadings(startDate: "2021-01-01")
+            XCTFail("Expected error for client response")
+        } catch {
+            XCTAssertEqual((error as? URLError)?.code, .badServerResponse)
+        }
+    }
+
+    func testFetchBGReadingsHandlesServerErrorResponse() async {
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!
+            return (response, Data())
+        }
+
+        let service = NightscoutService(baseURL: URL(string: "https://example.com")!)
+
+        do {
+            _ = try await service.fetchBGReadings(startDate: "2021-01-01")
+            XCTFail("Expected error for server response")
+        } catch {
+            XCTAssertEqual((error as? URLError)?.code, .badServerResponse)
+        }
+    }
+
+    func testMakeRequestThrowsForInvalidURL() {
+        let service = NightscoutService(
+            baseURL: URL(string: "https://example.com")!,
+            componentsBuilder: { _ in nil }
+        )
+        XCTAssertThrowsError(try service.makeRequest(path: "api/v1/entries.json", queryItems: [])) { error in
+            XCTAssertTrue(error is NightscoutServiceError)
         }
     }
 }
@@ -108,10 +134,6 @@ private class MockURLProtocol: URLProtocol {
             return
         }
         let (response, data) = handler(request)
-        if response.statusCode != 200 {
-            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
-            return
-        }
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: data)
         client?.urlProtocolDidFinishLoading(self)
