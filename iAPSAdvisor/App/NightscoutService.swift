@@ -20,19 +20,31 @@ struct CarbTreatment: Codable {
     let carbs: Double?
 }
 
+enum NightscoutServiceError: Error {
+    case invalidURL
+}
+
 class NightscoutService {
     private let baseURL: URL
     private let apiToken: String?
+    private let componentsBuilder: (URL) -> URLComponents?
 
-    init(baseURL: URL, apiToken: String? = nil) {
+    init(baseURL: URL, apiToken: String? = nil, componentsBuilder: @escaping (URL) -> URLComponents? = { url in
+        URLComponents(url: url, resolvingAgainstBaseURL: false)
+    }) {
         self.baseURL = baseURL
         self.apiToken = apiToken
+        self.componentsBuilder = componentsBuilder
     }
 
-    private func makeRequest(path: String, queryItems: [URLQueryItem]) -> URLRequest? {
-        guard var components = URLComponents(url: baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false) else { return nil }
+    func makeRequest(path: String, queryItems: [URLQueryItem]) throws -> URLRequest {
+        guard var components = componentsBuilder(baseURL.appendingPathComponent(path)) else {
+            throw NightscoutServiceError.invalidURL
+        }
         components.queryItems = queryItems
-        guard let url = components.url else { return nil }
+        guard let url = components.url else {
+            throw NightscoutServiceError.invalidURL
+        }
         var request = URLRequest(url: url)
         if let token = apiToken {
             request.addValue(token, forHTTPHeaderField: "api-secret")
@@ -40,13 +52,24 @@ class NightscoutService {
         return request
     }
 
+    private func validatedResponse(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw URLError(.badServerResponse)
+        }
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+        return (data, httpResponse)
+    }
+
     func fetchBGReadings(startDate: String) async throws -> [BGReading] {
         let items = [
             URLQueryItem(name: "count", value: "100"),
             URLQueryItem(name: "find[dateString][$gte]", value: startDate)
         ]
-        guard let request = makeRequest(path: "api/v1/entries.json", queryItems: items) else { return [] }
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let request = try makeRequest(path: "api/v1/entries.json", queryItems: items)
+        let (data, _) = try await validatedResponse(for: request)
         return try JSONDecoder().decode([BGReading].self, from: data)
     }
 
@@ -55,15 +78,15 @@ class NightscoutService {
         if let start = startDate {
             items.append(URLQueryItem(name: "find[created_at][$gte]", value: start))
         }
-        guard let request = makeRequest(path: "api/v1/treatments.json", queryItems: items) else { return [] }
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let request = try makeRequest(path: "api/v1/treatments.json", queryItems: items)
+        let (data, _) = try await validatedResponse(for: request)
         return try JSONDecoder().decode([InsulinTreatment].self, from: data)
     }
 
     func fetchCarbIntake() async throws -> [CarbTreatment] {
         let items = [URLQueryItem(name: "find[eventType]", value: "Carb Correction")]
-        guard let request = makeRequest(path: "api/v1/treatments.json", queryItems: items) else { return [] }
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let request = try makeRequest(path: "api/v1/treatments.json", queryItems: items)
+        let (data, _) = try await validatedResponse(for: request)
         return try JSONDecoder().decode([CarbTreatment].self, from: data)
     }
 }
