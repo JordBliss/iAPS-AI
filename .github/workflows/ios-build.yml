@@ -42,7 +42,7 @@ jobs:
           xcodebuild \
             -exportArchive \
             -archivePath $PWD/build/iAPSAdvisor.xcarchive \
-            -exportOptionsPlist ExportOptions.plist \
+            -exportOptionsPlist CI/ExportOptions.plist \
             -exportPath $PWD/build
 
       - name: Upload artifact
