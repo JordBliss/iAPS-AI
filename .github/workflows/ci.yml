@@ -9,11 +9,15 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '15.4'
+      - name: Build and test
         run: |
           cd iAPSAdvisor
-          swift build
-      - name: Test
-        run: |
-          cd iAPSAdvisor
-          swift test
+          xcodebuild \
+            -project iAPSAdvisor.xcodeproj \
+            -scheme iAPSAdvisor \
+            -destination 'platform=iOS Simulator,name=iPhone 14' \
+            test

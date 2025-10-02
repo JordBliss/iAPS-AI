@@ -31,6 +31,7 @@ jobs:
         working-directory: iAPSAdvisor
         run: |
           xcodebuild \
+            -project iAPSAdvisor.xcodeproj \
             -scheme iAPSAdvisor \
             -configuration Release \
             -archivePath $PWD/build/iAPSAdvisor.xcarchive \
