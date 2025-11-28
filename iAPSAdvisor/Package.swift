@@ -9,7 +9,7 @@ var targets: [Target] = [
     .target(
         name: "NightscoutService",
         path: "App",
-        exclude: ["iAPSAdvisorApp.swift"],
+        exclude: ["iAPSAdvisorApp.swift", "LoopSettingsProvider.swift"],
         sources: ["NightscoutService.swift"]
     ),
     .testTarget(

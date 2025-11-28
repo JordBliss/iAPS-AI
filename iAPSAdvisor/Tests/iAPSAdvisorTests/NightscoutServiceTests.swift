@@ -57,6 +57,25 @@ final class NightscoutServiceTests: XCTestCase {
         XCTAssertTrue(items.contains(URLQueryItem(name: "find[eventType]", value: "Insulin Injection")))
     }
 
+    func testFetchCarbIntakeHonorsStartDate() async throws {
+        let startDate = "2024-05-01"
+        var capturedRequest: URLRequest?
+        MockURLProtocol.requestHandler = { request in
+            capturedRequest = request
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let data = "[]".data(using: .utf8)!
+            return (response, data)
+        }
+
+        let service = NightscoutService(baseURL: URL(string: "https://example.com")!)
+        _ = try await service.fetchCarbIntake(startDate: startDate)
+
+        let components = URLComponents(url: capturedRequest!.url!, resolvingAgainstBaseURL: false)!
+        let items = components.queryItems ?? []
+        XCTAssertTrue(items.contains(URLQueryItem(name: "find[eventType]", value: "Carb Correction")))
+        XCTAssertTrue(items.contains(URLQueryItem(name: "find[created_at][$gte]", value: startDate)))
+    }
+
     func testFetchBGReadingsDecodingError() async {
         MockURLProtocol.requestHandler = { request in
             let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
@@ -114,6 +133,63 @@ final class NightscoutServiceTests: XCTestCase {
         XCTAssertThrowsError(try service.makeRequest(path: "api/v1/entries.json", queryItems: [])) { error in
             XCTAssertTrue(error is NightscoutServiceError)
         }
+    }
+
+    func testSegmentedSummaryBuildsBuckets() async throws {
+        let entriesData = """
+        [
+            {"sgv": 120, "dateString": "2024-05-01T03:00:00Z"},
+            {"sgv": 140, "dateString": "2024-05-01T09:00:00Z"},
+            {"sgv": 160, "dateString": "2024-05-01T19:00:00Z"}
+        ]
+        """.data(using: .utf8)!
+
+        let insulinData = """
+        [
+            {"eventType": "Insulin Injection", "created_at": "2024-05-01T07:00:00Z", "insulin": 1.0}
+        ]
+        """.data(using: .utf8)!
+
+        let carbData = """
+        [
+            {"eventType": "Carb Correction", "created_at": "2024-05-01T13:00:00Z", "carbs": 30.0}
+        ]
+        """.data(using: .utf8)!
+
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            if request.url?.path.contains("entries") == true {
+                return (response, entriesData)
+            }
+            if request.url?.query?.contains("Carb%20Correction") == true {
+                return (response, carbData)
+            }
+            return (response, insulinData)
+        }
+
+        var components = DateComponents()
+        components.year = 2024
+        components.month = 5
+        components.day = 1
+        components.timeZone = TimeZone(secondsFromGMT: 0)
+        let calendar = Calendar(identifier: .gregorian)
+        let service = NightscoutService(baseURL: URL(string: "https://example.com")!)
+        let summaries = try await service.fetchSegmentedSummary(for: calendar.date(from: components)!, calendar: calendar)
+
+        let earlyMorning = summaries.first(where: { $0.segment == .earlyMorning })
+        XCTAssertEqual(earlyMorning?.averageGlucose, 120)
+        XCTAssertEqual(earlyMorning?.totalInsulin, 0)
+
+        let lateMorning = summaries.first(where: { $0.segment == .lateMorning })
+        XCTAssertEqual(lateMorning?.averageGlucose, 140)
+        XCTAssertEqual(lateMorning?.totalInsulin, 1.0)
+
+        let afternoon = summaries.first(where: { $0.segment == .afternoon })
+        XCTAssertEqual(afternoon?.averageGlucose, nil)
+        XCTAssertEqual(afternoon?.totalCarbs, 30.0)
+
+        let evening = summaries.first(where: { $0.segment == .evening })
+        XCTAssertEqual(evening?.averageGlucose, 160)
     }
 }
 
