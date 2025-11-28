@@ -13,6 +13,14 @@ An AI-assisted companion app that helps review iAPS (Loop) therapy settings agai
 
 Console output currently surfaces the fetched data, making it easy to prototype additional AI-powered analysis or automate setting recommendations.
 
+The app now treats Loop's `freeaps_settings.json` as the source of truth. When you supply a TEAMID, the UI will load the file from the Loop app group, preview its contents, and reuse any Nightscout URL or API secret it can infer so Nightscout calls stay aligned with the Loop setup. A helper button writes an `iAPSAdvisorLastTouched` marker back to the file so you can confirm round-trip access.
+
+## Working with `freeaps_settings.json`
+
+`ContentView` now uses `LoopSettingsProvider` to pull `freeaps_settings.json` from the Loop app group, infer Nightscout connection info, and show a preview of the entire JSON payload. A "Stamp advisor signature" button writes an `iAPSAdvisorLastTouched` field back to the file so you can confirm read/write access end-to-end.
+
+Future enhancements for AI-driven recommendations can build on the same provider to parse additional settings, merge model output, and write the amended JSON back into the Loop container.
+
 ## Project layout
 
 - **iAPSAdvisor** – SwiftUI iOS 15+ target that contains the `ContentView` UI and the Nightscout integration service.
