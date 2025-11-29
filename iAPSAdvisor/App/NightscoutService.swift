@@ -83,8 +83,10 @@ struct DaySegmentSummary: Identifiable {
     }
 }
 
-enum NightscoutServiceError: Error {
+enum NightscoutServiceError: Error, Equatable {
     case invalidURL
+    case nonHTTPResponse
+    case unsuccessfulStatus(Int)
 }
 
 private enum NightscoutDateParser {
@@ -144,10 +146,10 @@ class NightscoutService {
     private func validatedResponse(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
-            throw URLError(.badServerResponse)
+            throw NightscoutServiceError.nonHTTPResponse
         }
         guard (200...299).contains(httpResponse.statusCode) else {
-            throw URLError(.badServerResponse)
+            throw NightscoutServiceError.unsuccessfulStatus(httpResponse.statusCode)
         }
         return (data, httpResponse)
     }
