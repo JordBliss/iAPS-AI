@@ -10,8 +10,8 @@ A SwiftUI-based iOS app targeting iOS 15+.
 ## Features
 
 - Displays a welcome message
-- Lets you enter a Team ID
-- Prints the derived App Group name `group.com.{TEAMID}.loopkit.LoopGroup` to the console
+- Allows you to pick `freeaps_settings.json` from the Files app and previews its contents
+- Fetches Nightscout glucose entries, insulin events, and carb events for quick inspection
 
 ## Note
 
