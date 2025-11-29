@@ -57,6 +57,24 @@ final class NightscoutServiceTests: XCTestCase {
         XCTAssertTrue(items.contains(URLQueryItem(name: "find[eventType]", value: "Insulin Injection")))
     }
 
+    func testFetchInsulinTreatmentsHonorsStartDate() async throws {
+        let startDate = "2024-04-01"
+        var capturedRequest: URLRequest?
+        MockURLProtocol.requestHandler = { request in
+            capturedRequest = request
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let data = "[]".data(using: .utf8)!
+            return (response, data)
+        }
+
+        let service = NightscoutService(baseURL: URL(string: "https://example.com")!)
+        _ = try await service.fetchInsulinTreatments(startDate: startDate)
+
+        let components = URLComponents(url: capturedRequest!.url!, resolvingAgainstBaseURL: false)!
+        let items = components.queryItems ?? []
+        XCTAssertTrue(items.contains(URLQueryItem(name: "find[created_at][$gte]", value: startDate)))
+    }
+
     func testFetchCarbIntakeHonorsStartDate() async throws {
         let startDate = "2024-05-01"
         var capturedRequest: URLRequest?
@@ -74,6 +92,23 @@ final class NightscoutServiceTests: XCTestCase {
         let items = components.queryItems ?? []
         XCTAssertTrue(items.contains(URLQueryItem(name: "find[eventType]", value: "Carb Correction")))
         XCTAssertTrue(items.contains(URLQueryItem(name: "find[created_at][$gte]", value: startDate)))
+    }
+
+    func testFetchCarbIntakeOmitsStartDateWhenNotProvided() async throws {
+        var capturedRequest: URLRequest?
+        MockURLProtocol.requestHandler = { request in
+            capturedRequest = request
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let data = "[]".data(using: .utf8)!
+            return (response, data)
+        }
+
+        let service = NightscoutService(baseURL: URL(string: "https://example.com")!)
+        _ = try await service.fetchCarbIntake()
+
+        let components = URLComponents(url: capturedRequest!.url!, resolvingAgainstBaseURL: false)!
+        let items = components.queryItems ?? []
+        XCTAssertFalse(items.contains { $0.name == "find[created_at][$gte]" })
     }
 
     func testFetchBGReadingsDecodingError() async {
@@ -104,8 +139,10 @@ final class NightscoutServiceTests: XCTestCase {
         do {
             _ = try await service.fetchBGReadings(startDate: "2021-01-01")
             XCTFail("Expected error for client response")
+        } catch let error as NightscoutServiceError {
+            XCTAssertEqual(error, .unsuccessfulStatus(404))
         } catch {
-            XCTAssertEqual((error as? URLError)?.code, .badServerResponse)
+            XCTFail("Unexpected error: \(error)")
         }
     }
 
@@ -120,8 +157,28 @@ final class NightscoutServiceTests: XCTestCase {
         do {
             _ = try await service.fetchBGReadings(startDate: "2021-01-01")
             XCTFail("Expected error for server response")
+        } catch let error as NightscoutServiceError {
+            XCTAssertEqual(error, .unsuccessfulStatus(503))
         } catch {
-            XCTAssertEqual((error as? URLError)?.code, .badServerResponse)
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func testFetchBGReadingsHandlesNonHTTPResponse() async {
+        MockURLProtocol.requestHandler = { request in
+            let response = URLResponse(url: request.url!, mimeType: nil, expectedContentLength: 0, textEncodingName: nil)
+            return (response, Data())
+        }
+
+        let service = NightscoutService(baseURL: URL(string: "https://example.com")!)
+
+        do {
+            _ = try await service.fetchBGReadings(startDate: "2021-01-01")
+            XCTFail("Expected error for non-HTTP response")
+        } catch let error as NightscoutServiceError {
+            XCTAssertEqual(error, .nonHTTPResponse)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
         }
     }
 
@@ -194,7 +251,7 @@ final class NightscoutServiceTests: XCTestCase {
 }
 
 private class MockURLProtocol: URLProtocol {
-    static var requestHandler: ((URLRequest) -> (HTTPURLResponse, Data))?
+    static var requestHandler: ((URLRequest) -> (URLResponse, Data))?
 
     override class func canInit(with request: URLRequest) -> Bool {
         true
