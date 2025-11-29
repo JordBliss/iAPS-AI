@@ -4,7 +4,7 @@ An AI-assisted companion app that helps review iAPS (Loop) therapy settings agai
 
 ## What the app can do today
 
-- **Collect Loop configuration context.** Enter your Loop team identifier (TEAMID) so the app can display the matching App Group name (`group.com.{TEAMID}.loopkit.LoopGroup`) that is required when sharing data between Loop components.
+- **Load Loop settings directly.** Pick a `freeaps_settings.json` file from the on-device Files app, preview the raw JSON, and reuse any Nightscout URL or API secret it can infer so connectivity stays aligned with the Loop setup.
 - **Connect to a Nightscout site.** Provide the base Nightscout URL and, if needed, an API token. The built-in Nightscout service will attach the token as the `api-secret` header so it can reach protected endpoints.
 - **Review glucose trends.** Fetch the latest 100 blood glucose (BG) readings for a given start date via the `/api/v1/entries.json` endpoint.
 - **Audit recent insulin delivery.** Retrieve recent insulin injection events from the `/api/v1/treatments.json` endpoint, filtered by start date, to understand how Loop has been dosing.
@@ -13,11 +13,11 @@ An AI-assisted companion app that helps review iAPS (Loop) therapy settings agai
 
 Console output currently surfaces the fetched data, making it easy to prototype additional AI-powered analysis or automate setting recommendations.
 
-The app now treats Loop's `freeaps_settings.json` as the source of truth. When you supply a TEAMID, the UI will load the file from the Loop app group, preview its contents, and reuse any Nightscout URL or API secret it can infer so Nightscout calls stay aligned with the Loop setup. A helper button writes an `iAPSAdvisorLastTouched` marker back to the file so you can confirm round-trip access.
+The app treats Loop's `freeaps_settings.json` as the source of truth. The UI will browse for the file via the Files picker, preview its contents, and reuse any Nightscout URL or API secret it can infer so Nightscout calls stay aligned with the Loop setup. A helper button writes an `iAPSAdvisorLastTouched` marker back to the file so you can confirm round-trip access.
 
 ## Working with `freeaps_settings.json`
 
-`ContentView` now uses `LoopSettingsProvider` to pull `freeaps_settings.json` from the Loop app group, infer Nightscout connection info, and show a preview of the entire JSON payload. A "Stamp advisor signature" button writes an `iAPSAdvisorLastTouched` field back to the file so you can confirm read/write access end-to-end.
+`ContentView` now uses `LoopSettingsProvider` with a file importer so you can select `freeaps_settings.json` from the Files app, infer Nightscout connection info, and show a preview of the entire JSON payload. A "Stamp advisor signature" button writes an `iAPSAdvisorLastTouched` field back to the file so you can confirm read/write access end-to-end.
 
 Future enhancements for AI-driven recommendations can build on the same provider to parse additional settings, merge model output, and write the amended JSON back into the Loop container.
 
